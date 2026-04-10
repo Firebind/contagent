@@ -94,3 +94,15 @@ RUN npm install -g \
         playwright \
         wrangler && \
     npm cache clean --force
+
+# 5. Bun
+RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/opt/bun bash
+ENV BUN_INSTALL=/opt/bun
+ENV PATH="${BUN_INSTALL}/bin:${PATH}"
+RUN ln -sf /opt/bun/bin/bun /usr/local/bin/bun
+
+# 6. uv + global Python venv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+RUN uv venv /opt/global_venv
+ENV VIRTUAL_ENV=/opt/global_venv
+ENV PATH="/opt/global_venv/bin:${PATH}"
