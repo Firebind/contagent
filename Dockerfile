@@ -267,7 +267,7 @@ fi
 # Clone target repo if not already present
 if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_ORG}" ] && [ -n "${GITHUB_REPO}" ]; then
     if [ ! -d "/home/${USERNAME}/${GITHUB_REPO}/.git" ]; then
-        su - "${USERNAME}" -c "git clone 'https://${GITHUB_TOKEN}@github.com/${GITHUB_ORG}/${GITHUB_REPO}.git' '/home/${USERNAME}/${GITHUB_REPO}'"
+        su - "${USERNAME}" -c "git clone 'https://${GITHUB_TOKEN}@github.com/${GITHUB_ORG}/${GITHUB_REPO}.git' '/home/${USERNAME}/${GITHUB_REPO}'" || true
     fi
 fi
 
