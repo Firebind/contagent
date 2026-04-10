@@ -156,3 +156,41 @@ RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" && \
 ENV PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
 RUN yes | sdkmanager --licenses && \
     sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+# 12. Create non-root user (UID 1000 — required by Sortie)
+# Ubuntu 24.04 ships a built-in 'ubuntu' user at UID 1000; remove it first.
+RUN userdel -r ubuntu 2>/dev/null || true && \
+    useradd --create-home --shell /bin/bash --uid 1000 "${USERNAME}" && \
+    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# 13. Playwright + Chromium (after user creation so chown works)
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+RUN playwright install --with-deps chromium && \
+    chown -R "${USERNAME}:${USERNAME}" "${PLAYWRIGHT_BROWSERS_PATH}"
+ENV DISPLAY=:99
+ENV SCREEN_WIDTH=1280
+ENV SCREEN_HEIGHT=720
+RUN printf '#!/bin/bash\nXvfb :99 -screen 0 ${SCREEN_WIDTH}x${SCREEN_HEIGHT}x24 &\n' \
+        > /usr/local/bin/start-xvfb && \
+    chmod +x /usr/local/bin/start-xvfb
+
+# Fix ownership for directories the user needs to write to
+RUN chown -R "${USERNAME}:${USERNAME}" /opt/global_venv
+
+# 14. SSH server configuration
+RUN mkdir -p /var/run/sshd
+# Store SSH_KEY for entrypoint to install after any volume mount
+RUN if [ -n "${SSH_KEY}" ]; then \
+        printf '%s\n' "${SSH_KEY}" > /etc/ssh/authorized_keys.provision && \
+        chmod 600 /etc/ssh/authorized_keys.provision; \
+    fi
+RUN if [ -n "${SSH_PASSWORD}" ]; then \
+        echo "${USERNAME}:${SSH_PASSWORD}" | chpasswd; \
+    fi
+RUN sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#Port 22/Port 8022/' /etc/ssh/sshd_config && \
+    if [ -n "${SSH_PASSWORD}" ]; then \
+        sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config; \
+    else \
+        sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config; \
+    fi
