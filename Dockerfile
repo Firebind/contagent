@@ -106,3 +106,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 RUN uv venv /opt/global_venv
 ENV VIRTUAL_ENV=/opt/global_venv
 ENV PATH="/opt/global_venv/bin:${PATH}"
+
+# 7. Go (architecture-aware download)
+RUN ARCH=$(dpkg --print-architecture) && \
+    wget -qO /tmp/go.tar.gz "https://golang.org/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" && \
+    tar -C /usr/local -xzf /tmp/go.tar.gz && \
+    rm /tmp/go.tar.gz
+ENV PATH="/usr/local/go/bin:${PATH}"
