@@ -113,3 +113,34 @@ RUN ARCH=$(dpkg --print-architecture) && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
     rm /tmp/go.tar.gz
 ENV PATH="/usr/local/go/bin:${PATH}"
+
+# 8. Java — Amazon Corretto 21
+RUN wget -qO - https://apt.corretto.aws/corretto.key \
+        | gpg --dearmor -o /usr/share/keyrings/corretto-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/corretto-keyring.gpg] https://apt.corretto.aws stable main" \
+        | tee /etc/apt/sources.list.d/corretto.list && \
+    apt-get update && \
+    apt-get install -y java-21-amazon-corretto-jdk && \
+    rm -rf /var/lib/apt/lists/*
+# Resolve JAVA_HOME dynamically (handles amd64 and arm64)
+RUN JAVA_BIN=$(readlink -f "$(which java)") && \
+    echo "export JAVA_HOME=$(dirname $(dirname ${JAVA_BIN}))" >> /etc/environment
+ENV JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
+
+# 9. Maven
+RUN wget -qO /tmp/maven.tar.gz \
+        "https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz" && \
+    tar -xzf /tmp/maven.tar.gz -C /opt && \
+    ln -s /opt/apache-maven-${MAVEN_VERSION} /opt/maven && \
+    rm /tmp/maven.tar.gz
+ENV M2_HOME=/opt/maven
+
+# 10. Gradle
+RUN wget -qO /tmp/gradle.zip \
+        "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" && \
+    unzip -q /tmp/gradle.zip -d /opt && \
+    ln -s /opt/gradle-${GRADLE_VERSION} /opt/gradle && \
+    rm /tmp/gradle.zip
+ENV GRADLE_HOME=/opt/gradle
+
+ENV PATH="${JAVA_HOME}/bin:${M2_HOME}/bin:${GRADLE_HOME}/bin:${PATH}"
