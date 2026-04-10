@@ -76,3 +76,21 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     apt-get update && \
     apt-get install -y gh && \
     rm -rf /var/lib/apt/lists/*
+
+# 3. Node.js 22 (via NodeSource)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# 4. Global npm packages
+RUN npm install -g \
+        @anthropic-ai/claude-code \
+        typescript \
+        ts-node \
+        expo-cli \
+        @expo/cli \
+        eas-cli \
+        @react-native-community/cli \
+        playwright \
+        wrangler && \
+    npm cache clean --force
