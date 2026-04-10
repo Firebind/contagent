@@ -194,3 +194,33 @@ RUN sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd
     else \
         sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config; \
     fi
+
+# 15. supervisord config
+# Using <<EOF (unquoted) so ${USERNAME} is expanded from ARG at build time,
+# baking the username string into the config file.
+RUN mkdir -p /var/log/supervisor && \
+    cat > /etc/supervisor/conf.d/supervisord.conf <<EOF
+[supervisord]
+nodaemon=true
+logfile=/var/log/supervisor/supervisord.log
+logfile_maxbytes=50MB
+loglevel=info
+user=root
+
+[program:sshd]
+command=/usr/sbin/sshd -D
+autostart=true
+autorestart=true
+priority=10
+stdout_logfile=/var/log/supervisor/sshd.stdout.log
+stderr_logfile=/var/log/supervisor/sshd.stderr.log
+
+[program:sortie]
+command=/usr/bin/sortie --host 0.0.0.0
+user=${USERNAME}
+autostart=true
+autorestart=true
+priority=20
+stdout_logfile=/var/log/supervisor/sortie.stdout.log
+stderr_logfile=/var/log/supervisor/sortie.stderr.log
+EOF
