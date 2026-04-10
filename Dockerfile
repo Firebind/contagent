@@ -245,6 +245,9 @@ fi
 mkdir -p "/home/${USERNAME}/screenshots"
 mkdir -p "/home/${USERNAME}/workspaces"
 
+# Synthesize SORTIE_GITHUB_PROJECT from GITHUB_ORG/GITHUB_REPO if not explicitly set
+SORTIE_GITHUB_PROJECT="${SORTIE_GITHUB_PROJECT:-${GITHUB_ORG}/${GITHUB_REPO}}"
+
 # Write runtime credentials to a dedicated env file.
 # Written fresh on every start so Coolify env var changes take effect on redeploy.
 # /etc/bash.bashrc sources this file (wired up in the next Dockerfile step).
