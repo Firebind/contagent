@@ -224,3 +224,69 @@ priority=20
 stdout_logfile=/var/log/supervisor/sortie.stdout.log
 stderr_logfile=/var/log/supervisor/sortie.stderr.log
 EOF
+
+# 16. Entrypoint provisioning script
+# <<'ENTRYPOINT_EOF' (quoted) — variables inside are NOT expanded at build time.
+# They are read from the container's runtime environment when the script executes.
+RUN cat > /usr/local/bin/entrypoint.sh <<'ENTRYPOINT_EOF'
+#!/bin/bash
+set -e
+
+# Provision SSH authorized_keys after any volume mount
+if [ -f /etc/ssh/authorized_keys.provision ]; then
+    mkdir -p "/home/${USERNAME}/.ssh"
+    cp /etc/ssh/authorized_keys.provision "/home/${USERNAME}/.ssh/authorized_keys"
+    chmod 700 "/home/${USERNAME}/.ssh"
+    chmod 600 "/home/${USERNAME}/.ssh/authorized_keys"
+fi
+
+# Create required working directories
+mkdir -p "/home/${USERNAME}/screenshots"
+mkdir -p "/home/${USERNAME}/workspaces"
+
+# Write runtime credentials to a dedicated env file.
+# Written fresh on every start so Coolify env var changes take effect on redeploy.
+# /etc/bash.bashrc sources this file (wired up in the next Dockerfile step).
+cat > /etc/contagent-env.sh <<ENVEOF
+export ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+export GITHUB_TOKEN=${GITHUB_TOKEN}
+export GITHUB_ORG=${GITHUB_ORG}
+export GITHUB_REPO=${GITHUB_REPO}
+export SORTIE_GITHUB_TOKEN=${SORTIE_GITHUB_TOKEN}
+export SORTIE_GITHUB_PROJECT=${SORTIE_GITHUB_PROJECT}
+export EXPO_TOKEN=${EXPO_TOKEN}
+export CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+export CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
+ENVEOF
+
+# Authenticate GitHub CLI as the non-root user
+if [ -n "${GITHUB_TOKEN}" ]; then
+    echo "${GITHUB_TOKEN}" | su - "${USERNAME}" -c "gh auth login --with-token" || true
+fi
+
+# Clone target repo if not already present
+if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_ORG}" ] && [ -n "${GITHUB_REPO}" ]; then
+    if [ ! -d "/home/${USERNAME}/${GITHUB_REPO}/.git" ]; then
+        su - "${USERNAME}" -c "git clone 'https://${GITHUB_TOKEN}@github.com/${GITHUB_ORG}/${GITHUB_REPO}.git' '/home/${USERNAME}/${GITHUB_REPO}'"
+    fi
+fi
+
+# Write Claude Code config if not present (skip onboarding, allow all permissions)
+CLAUDE_CONFIG="/home/${USERNAME}/.claude.json"
+if [ ! -f "${CLAUDE_CONFIG}" ]; then
+    cat > "${CLAUDE_CONFIG}" <<'CLAUDEJSON'
+{
+  "theme": "dark",
+  "hasCompletedOnboarding": true,
+  "permissions": { "allow": ["*"], "deny": [] }
+}
+CLAUDEJSON
+fi
+
+# Fix ownership of entire home directory
+chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
+
+exec supervisord -c /etc/supervisor/conf.d/supervisord.conf
+ENTRYPOINT_EOF
+
+RUN chmod +x /usr/local/bin/entrypoint.sh
