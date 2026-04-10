@@ -144,3 +144,15 @@ RUN wget -qO /tmp/gradle.zip \
 ENV GRADLE_HOME=/opt/gradle
 
 ENV PATH="${JAVA_HOME}/bin:${M2_HOME}/bin:${GRADLE_HOME}/bin:${PATH}"
+
+# 11. Android SDK cmdline-tools
+ENV ANDROID_HOME=/opt/android-sdk
+RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" && \
+    wget -qO /tmp/tools.zip \
+        https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip && \
+    unzip -q /tmp/tools.zip -d "${ANDROID_HOME}/cmdline-tools" && \
+    mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${ANDROID_HOME}/cmdline-tools/latest" && \
+    rm /tmp/tools.zip
+ENV PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
+RUN yes | sdkmanager --licenses && \
+    sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
