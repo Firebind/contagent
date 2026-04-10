@@ -28,3 +28,51 @@ RUN if [ -z "$(echo "${SSH_KEY}" | xargs)" ] && [ -z "$(echo "${SSH_PASSWORD}" |
         echo "-----------------------------------------------------------------------" >&2; \
         exit 1; \
     fi
+
+# 1. System packages (single layer, sorted for cache stability)
+RUN apt-get update && \
+    apt-get install -y -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
+        build-essential \
+        ca-certificates \
+        curl \
+        fonts-liberation \
+        fonts-noto-color-emoji \
+        fonts-roboto \
+        git \
+        gnupg \
+        htop \
+        libgbm1 \
+        libasound2t64 \
+        libnss3 \
+        libxss1 \
+        net-tools \
+        netcat-openbsd \
+        nmap \
+        openssl \
+        openssh-server \
+        openssh-client \
+        python3 \
+        python3-dev \
+        python3-pip \
+        python3-venv \
+        silversearcher-ag \
+        sudo \
+        supervisor \
+        tmux \
+        tree \
+        unzip \
+        vim \
+        watchman \
+        wget \
+        xvfb && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2. GitHub CLI (official apt source)
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+        | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+        | tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y gh && \
+    rm -rf /var/lib/apt/lists/*
