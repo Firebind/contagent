@@ -27,7 +27,8 @@ GITHUB_ORG=
 GITHUB_REPO=
 
 # Sortie AI
-SORTIE_GITHUB_TOKEN=
+# SORTIE_GITHUB_TOKEN is optional — falls back to GITHUB_TOKEN if not set
+# SORTIE_GITHUB_TOKEN=
 # SORTIE_GITHUB_PROJECT is optional — synthesized from GITHUB_ORG/GITHUB_REPO if not set
 # SORTIE_GITHUB_PROJECT=
 

@@ -245,7 +245,8 @@ fi
 mkdir -p "/home/${USERNAME}/screenshots"
 mkdir -p "/home/${USERNAME}/workspaces"
 
-# Synthesize SORTIE_GITHUB_PROJECT from GITHUB_ORG/GITHUB_REPO if not explicitly set
+# Synthesize optional vars from base vars if not explicitly set
+SORTIE_GITHUB_TOKEN="${SORTIE_GITHUB_TOKEN:-${GITHUB_TOKEN}}"
 SORTIE_GITHUB_PROJECT="${SORTIE_GITHUB_PROJECT:-${GITHUB_ORG}/${GITHUB_REPO}}"
 
 # Write runtime credentials to a dedicated env file.
