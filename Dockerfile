@@ -290,3 +290,32 @@ exec supervisord -c /etc/supervisor/conf.d/supervisord.conf
 ENTRYPOINT_EOF
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# 17. Sortie binary from stage 1
+COPY --from=sortie /usr/bin/sortie /usr/bin/sortie
+
+# 18. PATH and environment persistence for SSH sessions
+# /etc/contagent-env.sh is written by entrypoint.sh at container start with runtime values.
+# The source line here ensures all interactive SSH shells pick it up.
+RUN echo '[ -f /etc/contagent-env.sh ] && source /etc/contagent-env.sh' >> /etc/bash.bashrc && \
+    { \
+        echo "export JAVA_HOME=${JAVA_HOME}"; \
+        echo "export M2_HOME=${M2_HOME}"; \
+        echo "export GRADLE_HOME=${GRADLE_HOME}"; \
+        echo "export ANDROID_HOME=${ANDROID_HOME}"; \
+        echo "export BUN_INSTALL=${BUN_INSTALL}"; \
+        echo "export VIRTUAL_ENV=${VIRTUAL_ENV}"; \
+        echo "export PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH}"; \
+        echo "export DISPLAY=${DISPLAY}"; \
+        echo 'export PATH="/opt/global_venv/bin:/opt/bun/bin:/usr/local/go/bin:/usr/lib/jvm/java-21-amazon-corretto/bin:/opt/maven/bin:/opt/gradle/bin:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:$PATH"'; \
+        echo "source /opt/global_venv/bin/activate"; \
+        echo "alias ls='ls -lrth --color=auto'"; \
+        echo "alias headless-chrome='chromium --headless --no-sandbox --disable-gpu'"; \
+    } >> /etc/bash.bashrc
+
+EXPOSE 7678 8022
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+    CMD wget -qO /dev/null http://localhost:7678/readyz || exit 1
+
+CMD ["/usr/local/bin/entrypoint.sh"]
