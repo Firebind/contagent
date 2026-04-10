@@ -209,6 +209,7 @@ user=root
 
 [program:sshd]
 command=/usr/sbin/sshd -D
+user=root
 autostart=true
 autorestart=true
 priority=10
@@ -258,6 +259,7 @@ export EXPO_TOKEN=${EXPO_TOKEN}
 export CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
 export CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
 ENVEOF
+chmod 600 /etc/contagent-env.sh
 
 # Authenticate GitHub CLI as the non-root user
 if [ -n "${GITHUB_TOKEN}" ]; then

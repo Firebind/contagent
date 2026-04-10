@@ -86,7 +86,9 @@ ssh -p 8022 sortie@<server-ip>
 
 Sortie reads `SORTIE_GITHUB_TOKEN` and `SORTIE_GITHUB_PROJECT` to poll GitHub Issues.
 It dispatches each issue to Claude Code running as the `sortie` user with
-`--dangerously-skip-permissions` for headless unattended operation.
+`--dangerously-skip-permissions` for headless unattended operation. This flag is required
+for Sortie's non-interactive Claude Code invocations and is safe because Claude Code runs
+as a non-root user (UID 1000).
 
 Health endpoint: `GET http://localhost:7678/readyz`
 
