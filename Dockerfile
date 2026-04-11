@@ -265,7 +265,7 @@ export EXPO_TOKEN=${EXPO_TOKEN}
 export CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
 export CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
 ENVEOF
-chmod 600 /etc/contagent-env.sh
+chmod 644 /etc/contagent-env.sh
 
 # Authenticate GitHub CLI as the non-root user
 if [ -n "${GITHUB_TOKEN}" ]; then
@@ -308,7 +308,7 @@ workspace:
 
 agent:
   kind: claude-code
-  command: claude-headless
+  command: claude
   max_turns: 20
 ---
 

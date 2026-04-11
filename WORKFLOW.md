@@ -21,7 +21,7 @@ workspace:
 
 agent:
   kind: claude-code
-  command: claude-headless
+  command: claude
   max_turns: 20
 ---
 
