@@ -217,7 +217,7 @@ stdout_logfile=/var/log/supervisor/sshd.stdout.log
 stderr_logfile=/var/log/supervisor/sshd.stderr.log
 
 [program:sortie]
-command=/usr/bin/sortie --host 0.0.0.0 /home/${USERNAME}/WORKFLOW.md
+command=/usr/bin/sortie --log-level debug --host 0.0.0.0 /home/${USERNAME}/WORKFLOW.md
 user=${USERNAME}
 autostart=true
 autorestart=true
@@ -346,17 +346,16 @@ else
 fi
 echo "==========================" >&2
 
-# Write Claude Code config if not present (skip onboarding, allow all permissions)
+# Write Claude Code config — always overwrite to prevent stale personal settings
+# (e.g. bridge/Harbor features from a developer's account) from blocking headless operation.
 CLAUDE_CONFIG="/home/${USERNAME}/.claude.json"
-if [ ! -f "${CLAUDE_CONFIG}" ]; then
-    cat > "${CLAUDE_CONFIG}" <<'CLAUDEJSON'
+cat > "${CLAUDE_CONFIG}" <<'CLAUDEJSON'
 {
   "theme": "dark",
   "hasCompletedOnboarding": true,
   "permissions": { "allow": ["*"], "deny": [] }
 }
 CLAUDEJSON
-fi
 
 # Fix ownership of entire home directory
 chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
