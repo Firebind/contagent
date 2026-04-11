@@ -308,7 +308,7 @@ workspace:
 
 agent:
   kind: claude-code
-  command: claude --dangerously-skip-permissions
+  command: claude-headless
   max_turns: 20
 ---
 
@@ -366,7 +366,13 @@ ENTRYPOINT_EOF
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# 17. Sortie binary from stage 1
+# 17. Claude Code wrapper — Sortie execs the command as a single binary name,
+# so flags cannot be embedded in the command string. This wrapper forwards all args.
+RUN printf '#!/bin/bash\nexec claude --dangerously-skip-permissions "$@"\n' \
+        > /usr/local/bin/claude-headless && \
+    chmod +x /usr/local/bin/claude-headless
+
+# 18. Sortie binary from stage 1
 COPY --from=sortie /usr/bin/sortie /usr/bin/sortie
 
 # 18. PATH and environment persistence for SSH sessions

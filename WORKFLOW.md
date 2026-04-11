@@ -21,7 +21,7 @@ workspace:
 
 agent:
   kind: claude-code
-  command: claude --dangerously-skip-permissions
+  command: claude-headless
   max_turns: 20
 ---
 
