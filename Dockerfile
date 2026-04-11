@@ -217,7 +217,7 @@ stdout_logfile=/var/log/supervisor/sshd.stdout.log
 stderr_logfile=/var/log/supervisor/sshd.stderr.log
 
 [program:sortie]
-command=/usr/bin/sortie --host 0.0.0.0
+command=/usr/bin/sortie /home/${USERNAME}/WORKFLOW.md --host 0.0.0.0
 user=${USERNAME}
 autostart=true
 autorestart=true
@@ -275,6 +275,63 @@ if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_ORG}" ] && [ -n "${GITHUB_REPO}" ]
     if [ ! -d "/home/${USERNAME}/${GITHUB_REPO}/.git" ]; then
         su - "${USERNAME}" -c "git clone 'https://${GITHUB_TOKEN}@github.com/${GITHUB_ORG}/${GITHUB_REPO}.git' '/home/${USERNAME}/${GITHUB_REPO}'" || true
     fi
+fi
+
+# Write Sortie WORKFLOW.md if not present
+# Uses an unquoted heredoc so ${VAR} references are expanded from the runtime environment.
+# Go template delimiters {{ }} are not bash-special and are written literally for Sortie.
+WORKFLOW_FILE="/home/${USERNAME}/WORKFLOW.md"
+if [ ! -f "${WORKFLOW_FILE}" ]; then
+    cat > "${WORKFLOW_FILE}" <<WORKFLOWEOF
+---
+tracker:
+  kind: github
+  api_key: ${SORTIE_GITHUB_TOKEN}
+  project: ${SORTIE_GITHUB_PROJECT}
+  query_filter: "label:sortie"
+  active_states:
+    - backlog
+    - in-progress
+    - review
+  in_progress_state: in-progress
+  handoff_state: review
+  terminal_states:
+    - done
+    - wontfix
+
+polling:
+  interval_ms: 60000
+
+workspace:
+  root: /home/${USERNAME}/workspaces
+
+agent:
+  kind: claude-code
+  max_turns: 20
+---
+
+You are a senior software engineer. Implement the GitHub issue assigned to you.
+
+## Task
+
+**#{{ .issue.identifier }}**: {{ .issue.title }}
+{{ if .issue.description }}
+### Description
+
+{{ .issue.description }}
+{{ end }}
+{{ if .issue.url }}
+**Issue:** {{ .issue.url }}
+{{ end }}
+
+## Instructions
+
+- Work in the cloned repository at your current directory
+- Create a feature branch for your changes
+- Write tests where appropriate
+- Commit with conventional commit messages (feat:, fix:, chore:, docs:, refactor:, test:)
+- Open a pull request when complete, linking the issue number
+WORKFLOWEOF
 fi
 
 # Write Claude Code config if not present (skip onboarding, allow all permissions)
