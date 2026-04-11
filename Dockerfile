@@ -217,7 +217,7 @@ stdout_logfile=/var/log/supervisor/sshd.stdout.log
 stderr_logfile=/var/log/supervisor/sshd.stderr.log
 
 [program:sortie]
-command=/usr/bin/sortie /home/${USERNAME}/WORKFLOW.md --host 0.0.0.0
+command=/usr/bin/sortie --host 0.0.0.0 /home/${USERNAME}/WORKFLOW.md
 user=${USERNAME}
 autostart=true
 autorestart=true
@@ -294,7 +294,6 @@ tracker:
   active_states:
     - backlog
     - in-progress
-    - review
   in_progress_state: in-progress
   handoff_state: review
   terminal_states:

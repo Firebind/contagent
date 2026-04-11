@@ -7,7 +7,6 @@ tracker:
   active_states:
     - backlog
     - in-progress
-    - review
   in_progress_state: in-progress
   handoff_state: review
   terminal_states:
