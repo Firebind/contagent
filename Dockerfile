@@ -222,8 +222,10 @@ user=${USERNAME}
 autostart=true
 autorestart=true
 priority=20
-stdout_logfile=/var/log/supervisor/sortie.stdout.log
-stderr_logfile=/var/log/supervisor/sortie.stderr.log
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
 EOF
 
 # 16. Entrypoint provisioning script
@@ -333,6 +335,16 @@ You are a senior software engineer. Implement the GitHub issue assigned to you.
 - Open a pull request when complete, linking the issue number
 WORKFLOWEOF
 fi
+
+# Diagnostic: confirm WORKFLOW.md exists and show its header
+echo "=== WORKFLOW.md check ===" >&2
+if [ -f "${WORKFLOW_FILE}" ]; then
+    echo "WORKFLOW.md present at ${WORKFLOW_FILE}" >&2
+    head -10 "${WORKFLOW_FILE}" >&2
+else
+    echo "ERROR: WORKFLOW.md missing at ${WORKFLOW_FILE}" >&2
+fi
+echo "==========================" >&2
 
 # Write Claude Code config if not present (skip onboarding, allow all permissions)
 CLAUDE_CONFIG="/home/${USERNAME}/.claude.json"
