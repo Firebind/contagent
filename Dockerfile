@@ -200,6 +200,16 @@ RUN sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd
 # baking the username string into the config file.
 RUN mkdir -p /var/log/supervisor && \
     cat > /etc/supervisor/conf.d/supervisord.conf <<EOF
+[unix_http_server]
+file=/var/run/supervisor.sock
+chmod=0700
+
+[rpcinterface:supervisor]
+supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
+
+[supervisorctl]
+serverurl=unix:///var/run/supervisor.sock
+
 [supervisord]
 nodaemon=true
 logfile=/var/log/supervisor/supervisord.log
