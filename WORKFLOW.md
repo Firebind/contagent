@@ -43,8 +43,8 @@ You are a senior software engineer. Implement the GitHub issue assigned to you.
 
 ## Instructions
 
-- Work in the cloned repository at your current directory
-- Create a feature branch for your changes
+- The repository is already cloned at `~/fieldstone-app` — do not clone it again
+- `cd ~/fieldstone-app` and create a feature branch for your changes
 - Write tests where appropriate
 - Commit with conventional commit messages (feat:, fix:, chore:, docs:, refactor:, test:)
 - Open a pull request when complete, linking the issue number

@@ -232,6 +232,7 @@ user=${USERNAME}
 autostart=true
 autorestart=true
 priority=20
+directory=/home/${USERNAME}
 environment=HOME=/home/${USERNAME}
 stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
@@ -341,8 +342,8 @@ You are a senior software engineer. Implement the GitHub issue assigned to you.
 
 ## Instructions
 
-- Work in the cloned repository at your current directory
-- Create a feature branch for your changes
+- The repository is already cloned at ~/${GITHUB_REPO} — do not clone it again
+- cd ~/${GITHUB_REPO} and create a feature branch for your changes
 - Write tests where appropriate
 - Commit with conventional commit messages (feat:, fix:, chore:, docs:, refactor:, test:)
 - Open a pull request when complete, linking the issue number
