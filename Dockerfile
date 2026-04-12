@@ -222,6 +222,7 @@ user=${USERNAME}
 autostart=true
 autorestart=true
 priority=20
+environment=HOME=/home/${USERNAME}
 stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
@@ -310,6 +311,8 @@ agent:
   kind: claude-code
   command: claude
   max_turns: 20
+  turn_timeout_ms: 600000
+  read_timeout_ms: 300000
 ---
 
 You are a senior software engineer. Implement the GitHub issue assigned to you.
