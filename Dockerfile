@@ -233,7 +233,7 @@ autostart=true
 autorestart=true
 priority=20
 directory=/home/${USERNAME}
-environment=HOME=/home/${USERNAME}
+environment=HOME=/home/${USERNAME},ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
