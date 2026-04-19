@@ -273,7 +273,7 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
-environment=PATH="/usr/local/bin:/usr/bin:%(ENV_PATH)s",ANTHROPIC_API_KEY="%(ENV_ANTHROPIC_API_KEY)s",DATABASE_URL="%(ENV_DATABASE_URL)s",HOME=/home/${USERNAME},ANTHROPIC_MODEL=claude-sonnet-4-6
+environment=PATH="/usr/local/bin:/usr/bin:%(ENV_PATH)s",ANTHROPIC_API_KEY="%(ENV_ANTHROPIC_API_KEY)s",DATABASE_URL="%(ENV_DATABASE_URL)s",HOME=/home/${USERNAME},ANTHROPIC_MODEL="%(ENV_ANTHROPIC_MODEL)s"
 EOF
 
 # 16. Entrypoint provisioning script
@@ -312,6 +312,7 @@ export EXPO_TOKEN=${EXPO_TOKEN}
 export CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
 export CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
 export DATABASE_URL=postgresql://${USERNAME}@localhost:5432/${USERNAME}
+export ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
 ENVEOF
 chmod 644 /etc/contagent-env.sh
 
