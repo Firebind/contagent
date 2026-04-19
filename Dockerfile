@@ -168,18 +168,13 @@ RUN userdel -r ubuntu 2>/dev/null || true && \
     useradd --create-home --shell /bin/bash --uid 1000 "${USERNAME}" && \
     echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# 12. PostgreSQL 16 — configure trust auth and create app user/database for integration tests
+# 12. PostgreSQL 16 — configure trust auth
+# pg_createcluster runs during package install; we only overwrite pg_hba.conf here.
+# User/database creation happens in entrypoint.sh (pg_ctl is unreliable in build RUN steps).
 ENV PGDATA=/var/lib/postgresql/16/main
 ENV DATABASE_URL=postgresql://${USERNAME}@localhost:5432/${USERNAME}
-RUN mkdir -p /var/run/postgresql && \
-    chown postgres:postgres /var/run/postgresql && \
-    # Trust all local connections — appropriate for an isolated dev/test container
-    printf 'local   all   all                   trust\nhost    all   all   127.0.0.1/32    trust\nhost    all   all   ::1/128         trust\n' \
-        > /etc/postgresql/16/main/pg_hba.conf && \
-    su -s /bin/bash postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D $PGDATA -w start" && \
-    su -s /bin/bash postgres -c "psql -c 'CREATE USER ${USERNAME} WITH SUPERUSER;'" && \
-    su -s /bin/bash postgres -c "psql -c 'CREATE DATABASE ${USERNAME} OWNER ${USERNAME};'" && \
-    su -s /bin/bash postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D $PGDATA -w stop"
+RUN printf 'local   all   all                   trust\nhost    all   all   127.0.0.1/32    trust\nhost    all   all   ::1/128         trust\n' \
+        > /etc/postgresql/16/main/pg_hba.conf
 
 # 13. Worker script and Claude context files
 COPY claude_worker.py /home/${USERNAME}/
@@ -240,28 +235,32 @@ password=supervisord
 
 [supervisord]
 nodaemon=true
-logfile=/var/log/supervisor/supervisord.log
-logfile_maxbytes=50MB
+logfile=/dev/stdout
+logfile_maxbytes=0
 loglevel=info
 user=root
 
 [program:postgres]
-command=/usr/lib/postgresql/16/bin/postgres -D /var/lib/postgresql/16/main -c config_file=/etc/postgresql/16/main/postgresql.conf
+command=/usr/lib/postgresql/16/bin/postgres -D /var/lib/postgresql/16/main -c config_file=/etc/postgresql/16/main/postgresql.conf -c logging_collector=off -c log_destination=stderr
 user=postgres
 autostart=true
 autorestart=true
 priority=5
-stdout_logfile=/var/log/supervisor/postgres.stdout.log
-stderr_logfile=/var/log/supervisor/postgres.stderr.log
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
 
 [program:sshd]
-command=/usr/sbin/sshd -D
+command=/usr/sbin/sshd -D -e
 user=root
 autostart=true
 autorestart=true
 priority=10
-stdout_logfile=/var/log/supervisor/sshd.stdout.log
-stderr_logfile=/var/log/supervisor/sshd.stderr.log
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
 
 [program:claude-worker]
 command=/usr/bin/python3 /home/${USERNAME}/claude_worker.py
@@ -359,6 +358,15 @@ chown postgres:postgres /var/run/postgresql
 
 # Remove stale postgres PID file left by an ungraceful container shutdown
 rm -f /var/lib/postgresql/16/main/postmaster.pid
+
+# Create the app role and database on first start (idempotent — errors suppressed if they exist)
+if su -s /bin/bash postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/16/main -w -l /tmp/pg-init.log start"; then
+    su -s /bin/bash postgres -c "psql -c 'CREATE USER ${USERNAME} WITH SUPERUSER;'" 2>/dev/null || true
+    su -s /bin/bash postgres -c "psql -c 'CREATE DATABASE ${USERNAME} OWNER ${USERNAME};'" 2>/dev/null || true
+    su -s /bin/bash postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/16/main -w stop" || true
+else
+    echo "[entrypoint] WARNING: postgres init failed — see /tmp/pg-init.log"
+fi
 
 # Export runtime env vars so supervisord inherits them (used by %(ENV_X)s in supervisord.conf)
 set -a
