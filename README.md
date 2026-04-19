@@ -1,6 +1,6 @@
 # Contagent = Container + Agent
 
-Kitchen-sink container for automatic agentic software development. Sortie AI picks up
+Kitchen-sink container for automatic agentic software development. AI picks up
 GitHub Issues and dispatches them to Claude Code. SSH access for direct developer
 interaction. Deployed via Coolify.
 
@@ -9,8 +9,8 @@ interaction. Deployed via Coolify.
 ```
 supervisord (root, PID 1)
 ├── sshd -D                       (root, port 8022)
-└── sortie --host 0.0.0.0         (sortie user, port 7678)
-    └── claude --dangerously-skip-permissions   (sortie user, per-issue subprocess)
+└── userdir --host 0.0.0.0        
+    └── claude --dangerously-skip-permissions   (user, per-issue subprocess)
 ```
 
 ## Coolify Deployment
@@ -21,7 +21,7 @@ In your Coolify application, check **"Build Variable"** for each of these:
 
 | Variable | Purpose |
 |----------|---------|
-| `USERNAME` | Linux username (default: `sortie`) |
+| `USERNAME` | Linux username |
 | `SSH_KEY` | Your SSH public key (`cat ~/.ssh/id_rsa.pub`) |
 | `SSH_PASSWORD` | Fallback password (optional if SSH_KEY is set) |
 
@@ -35,8 +35,6 @@ Standard Coolify env vars (no "Build Variable" checkbox needed):
 | `GITHUB_TOKEN` | gh CLI auth + repo cloning |
 | `GITHUB_ORG` | Target GitHub organization |
 | `GITHUB_REPO` | Target repository name |
-| `SORTIE_GITHUB_TOKEN` | Sortie GitHub Issues tracker |
-| `SORTIE_GITHUB_PROJECT` | GitHub project (`owner/repo`) |
 | `EXPO_TOKEN` | EAS CLI authentication |
 | `CLOUDFLARE_API_TOKEN` | Wrangler (Workers + R2 + DNS) |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
@@ -47,7 +45,7 @@ Standard Coolify env vars (no "Build Variable" checkbox needed):
 
 ```bash
 docker build \
-  --build-arg USERNAME="sortie" \
+  --build-arg USERNAME="jay" \
   --build-arg SSH_KEY="$(cat ~/.ssh/id_rsa.pub)" \
   --build-arg SSH_PASSWORD="your_password" \
   -t contagent:latest .
@@ -56,7 +54,7 @@ docker build \
 ## SSH Access
 
 ```bash
-ssh -p 8022 sortie@<server-ip>
+ssh -p 8022 jay@<server-ip>
 ```
 
 ## Health Check
@@ -70,7 +68,7 @@ curl http://<server-ip>:7678/readyz
 ```bash
 # From inside container:
 supervisorctl status
-tail -f /var/log/supervisor/sortie.stdout.log
+tail -f /var/log/supervisor/<user>.stdout.log
 tail -f /var/log/supervisor/sshd.stderr.log
 ```
 
@@ -94,4 +92,3 @@ tail -f /var/log/supervisor/sshd.stderr.log
 | Wrangler | latest |
 | Watchman | system |
 | Claude Code | latest |
-| Sortie | latest |
