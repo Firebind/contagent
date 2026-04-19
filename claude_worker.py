@@ -1,33 +1,54 @@
-import subprocess
 import json
+import logging
 import os
-import sys, time
+import subprocess
+import sys
+import time
 from pathlib import Path
 
-# --- Configuration ---
+logging.basicConfig(
+    stream=sys.stdout,
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
+log = logging.getLogger("claude_worker")
+
 WORKSPACE_ROOT = Path(__file__).parent.resolve()
-BACKEND_REPO = user = os.getenv('BACKEND_REPO')
-FRONTEND_REPO = user = os.getenv('FRONTEND_REPO')
+BACKEND_REPO  = os.getenv('GITHUB_REPO')
+FRONTEND_REPO = os.getenv('GITHUB_REPO_2')
 TRIGGER_LABEL = "agent-ready"
 
+log.info("Configuration: WORKSPACE_ROOT=%s BACKEND_REPO=%s FRONTEND_REPO=%s TRIGGER_LABEL=%s",
+         WORKSPACE_ROOT, BACKEND_REPO, FRONTEND_REPO, TRIGGER_LABEL)
+
+
 def run_command(cmd, cwd=None):
-    """Utility to run shell commands and return output."""
-    result = subprocess.run(
-        cmd, shell=True, capture_output=True, text=True, cwd=cwd
-    )
+    log.debug("run_command: %s (cwd=%s)", cmd, cwd)
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=cwd)
     if result.returncode != 0:
-        print(f"Error: {result.stderr}")
+        log.error("Command failed (exit %d): %s", result.returncode, result.stderr.strip())
         return None
+    log.debug("Command output: %s", result.stdout.strip()[:500])
     return result.stdout.strip()
 
+
 def get_pending_issues(repo_path):
-    """Fetch issues with the trigger label using GitHub CLI."""
+    log.info("Fetching issues labelled '%s' in %s", TRIGGER_LABEL, repo_path)
     cmd = f"gh issue list --label '{TRIGGER_LABEL}' --json number,title,body"
     output = run_command(cmd, cwd=repo_path)
-    return json.loads(output) if output else []
+    issues = json.loads(output) if output else []
+    log.info("Found %d pending issue(s) in %s", len(issues), repo_path.name)
+    return issues
+
 
 def process_issue(issue, repo_name):
-    # ... (rest of setup remains same)
+    issue_num = issue['number']
+    title     = issue['title']
+
+    log.info("--- Starting issue #%d in %s: %s", issue_num, repo_name, title)
+
+    sibling = FRONTEND_REPO if repo_name == BACKEND_REPO else BACKEND_REPO
 
     instruction = (
         f"Task: Solve issue #{issue_num} in {repo_name}: '{title}'.\n\n"
@@ -39,73 +60,62 @@ def process_issue(issue, repo_name):
         f"1. Create a feature branch for your changes\n"
         f"2. Implement the logic changes in {repo_name}.\n"
         f"3. If you modify a Java Record or POJO in the backend, you MUST locate the corresponding "
-        f"TypeScript interface in '../{FRONTEND_REPO}' and update it to match.\n"
+        f"TypeScript interface in '../{sibling}' and update it to match.\n"
         f"4. Search the frontend code for any API calls or hooks that use this data and update them.\n"
         f"5. Verify the build in both repos (e.g., `./gradlew build` and `npm run tsc`).\n"
         f"6. Run relevant tests in both directories.\n"
-        f"7. Commit with conventional commit messages (feat:, fix:, chore:, docs:, refactor:, test:) \n"
+        f"7. Commit with conventional commit messages (feat:, fix:, chore:, docs:, refactor:, test:)\n"
         f"8. Create a Pull Request for each repository containing changes."
     )
 
-    # Calling Claude Code CLI
-    # We use --exec to pass the instruction and auto-exit after completion
-    claude_cmd = f"claude --dangerously-skip-permissions '{instruction}'"
+    cwd = WORKSPACE_ROOT / repo_name
+    log.info("Launching Claude for issue #%d (cwd=%s)", issue_num, cwd)
+    log.debug("Instruction:\n%s", instruction)
 
-    # We execute from the repo where the issue was found
-    subprocess.run(claude_cmd, shell=True, cwd=WORKSPACE_ROOT / repo_name)
-
-def process_issue_old(issue, repo_name):
-    issue_num = issue['number']
-    title = issue['title']
-    
-    print(f"🚀 Processing {repo_name} Issue #{issue_num}: {title}")
-    
-    # Unified prompt for cross-repo context
-    instruction = (
-        f"I need you to solve issue #{issue_num} in {repo_name}: '{title}'.\n"
-        f"IMPORTANT: This is a full-stack task. \n"
-        f"1. Your primary work is in {repo_name}.\n"
-        f"2. Check the sibling directory '../{FRONTEND_REPO if repo_name == BACKEND_REPO else BACKEND_REPO}' "
-        "to see if complementary changes (like API types, DTOs, or UI updates) are needed.\n"
-        "3. Implement the fix in BOTH repositories if necessary.\n"
-        "4. Run relevant tests in both directories.\n"
-        "5. Once finished, create a Pull Request for each repository that has changes."
+    result = subprocess.run(
+        ["claude", "--dangerously-skip-permissions", instruction],
+        cwd=cwd,
     )
 
-    # Calling Claude Code CLI
-    # We use --exec to pass the instruction and auto-exit after completion
-    claude_cmd = f"claude '{instruction}'"
+    log.info("Claude exited with code %d for issue #%d", result.returncode, issue_num)
+    if result.returncode != 0:
+        log.warning("Non-zero exit from Claude on issue #%d — check output above", issue_num)
 
-    # We execute from the repo where the issue was found
-    subprocess.run(claude_cmd, shell=True, cwd=WORKSPACE_ROOT / repo_name)
-
-import time
-
-# ... (keep your previous functions: run_command, get_pending_issues, process_issue)
 
 def main():
-    print("Worker started...")
+    log.info("Worker started (pid=%d)", os.getpid())
     while True:
         try:
-            for repo in [BACKEND_REPO, FRONTEND_REPO]:
+            repos = [r for r in [BACKEND_REPO, FRONTEND_REPO] if r]
+            if not repos:
+                log.warning("No repos configured (GITHUB_REPO and GITHUB_REPO_2 are both unset) — sleeping")
+            else:
+                log.debug("Poll cycle: checking repos %s", repos)
+
+            for repo in repos:
                 repo_path = WORKSPACE_ROOT / repo
                 if not repo_path.exists():
+                    log.warning("Repo path does not exist, skipping: %s", repo_path)
                     continue
 
                 issues = get_pending_issues(repo_path)
                 for issue in issues:
                     process_issue(issue, repo)
-                    # Label removal acts as your "queue acknowledgement"
-                    run_command(f"gh issue edit {issue['number']} --remove-label '{TRIGGER_LABEL}'", cwd=repo_path)
+                    log.info("Removing label '%s' from issue #%d", TRIGGER_LABEL, issue['number'])
+                    run_command(
+                        f"gh issue edit {issue['number']} --remove-label '{TRIGGER_LABEL}'",
+                        cwd=repo_path,
+                    )
 
-            # Wait 5 minutes before checking GitHub for new work items again
+            log.debug("Poll cycle complete, sleeping 300s")
             time.sleep(300)
 
         except Exception as e:
-            print(f"Loop error: {e}")
-            time.sleep(60) # Wait a minute before retrying on error
+            log.exception("Unhandled loop error: %s", e)
+            log.info("Sleeping 60s before retry")
+            time.sleep(60)
+
 
 if __name__ == "__main__":
-    print("Worker starting...")
-    #main()
-
+    log.info("Worker starting...")
+    main()
