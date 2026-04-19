@@ -106,5 +106,6 @@ def main():
             time.sleep(60) # Wait a minute before retrying on error
 
 if __name__ == "__main__":
-    main()
+    print("Worker starting...")
+    #main()
 

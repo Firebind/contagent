@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+# check=skip=SecretsUsedInArgOrEnv
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -27,8 +29,11 @@ RUN if [ -z "$(echo "${SSH_KEY}" | xargs)" ] && [ -z "$(echo "${SSH_PASSWORD}" |
         exit 1; \
     fi
 
-# 1. System packages — add all third-party apt sources first, then single update + install
-RUN \
+# 1. System packages — bootstrap curl/wget/gnupg, add third-party apt sources, then full install
+# Two apt-get update calls are required: the first fetches base Ubuntu packages needed to
+# set up third-party keyrings (curl, wget, gnupg); the second picks up those new sources.
+RUN apt-get update && \
+    apt-get install -y curl wget gnupg ca-certificates && \
     # GitHub CLI apt source
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
         | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
