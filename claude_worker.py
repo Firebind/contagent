@@ -108,7 +108,7 @@ def main():
                     )
 
             log.debug("Poll cycle complete, sleeping 300s")
-            time.sleep(300)
+            time.sleep(30)
 
         except Exception as e:
             log.exception("Unhandled loop error: %s", e)

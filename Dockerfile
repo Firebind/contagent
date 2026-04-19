@@ -71,6 +71,8 @@ RUN apt-get update && \
         python3 \
         python3-dev \
         python3-pip \
+        postgresql-16 \
+        postgresql-client-16 \
         python3-venv \
         silversearcher-ag \
         sudo \
@@ -166,8 +168,23 @@ RUN userdel -r ubuntu 2>/dev/null || true && \
     useradd --create-home --shell /bin/bash --uid 1000 "${USERNAME}" && \
     echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# 12. Worker script (placed early so downstream layer changes don't bust this cache)
+# 12. PostgreSQL 16 — configure trust auth and create app user/database for integration tests
+ENV PGDATA=/var/lib/postgresql/16/main
+ENV DATABASE_URL=postgresql://${USERNAME}@localhost:5432/${USERNAME}
+RUN mkdir -p /var/run/postgresql && \
+    chown postgres:postgres /var/run/postgresql && \
+    # Trust all local connections — appropriate for an isolated dev/test container
+    printf 'local   all   all                   trust\nhost    all   all   127.0.0.1/32    trust\nhost    all   all   ::1/128         trust\n' \
+        > /etc/postgresql/16/main/pg_hba.conf && \
+    su -s /bin/bash postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D $PGDATA -w start" && \
+    su -s /bin/bash postgres -c "psql -c 'CREATE USER ${USERNAME} WITH SUPERUSER;'" && \
+    su -s /bin/bash postgres -c "psql -c 'CREATE DATABASE ${USERNAME} OWNER ${USERNAME};'" && \
+    su -s /bin/bash postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D $PGDATA -w stop"
+
+# 13. Worker script and Claude context files
 COPY claude_worker.py /home/${USERNAME}/
+COPY container_CLAUDE.md /home/${USERNAME}/CLAUDE.md
+COPY skills.md /home/${USERNAME}/.claude/skills/container-tools.md
 
 # 13. Playwright + Chromium (after user creation so chown works)
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
@@ -210,12 +227,16 @@ RUN mkdir -p /var/log/supervisor && \
 [unix_http_server]
 file=/var/run/supervisor.sock
 chmod=0700
+username=supervisord
+password=supervisord
 
 [rpcinterface:supervisor]
 supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
 
 [supervisorctl]
 serverurl=unix:///var/run/supervisor.sock
+username=supervisord
+password=supervisord
 
 [supervisord]
 nodaemon=true
@@ -223,6 +244,15 @@ logfile=/var/log/supervisor/supervisord.log
 logfile_maxbytes=50MB
 loglevel=info
 user=root
+
+[program:postgres]
+command=/usr/lib/postgresql/16/bin/postgres -D /var/lib/postgresql/16/main -c config_file=/etc/postgresql/16/main/postgresql.conf
+user=postgres
+autostart=true
+autorestart=true
+priority=5
+stdout_logfile=/var/log/supervisor/postgres.stdout.log
+stderr_logfile=/var/log/supervisor/postgres.stderr.log
 
 [program:sshd]
 command=/usr/sbin/sshd -D
@@ -244,7 +274,7 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
-environment=PATH="/usr/local/bin:/usr/bin:%(ENV_PATH)s",ANTHROPIC_API_KEY="%(ENV_ANTHROPIC_API_KEY)s",HOME=/home/${USERNAME},ANTHROPIC_MODEL=claude-sonnet-4-6
+environment=PATH="/usr/local/bin:/usr/bin:%(ENV_PATH)s",ANTHROPIC_API_KEY="%(ENV_ANTHROPIC_API_KEY)s",DATABASE_URL="%(ENV_DATABASE_URL)s",HOME=/home/${USERNAME},ANTHROPIC_MODEL=claude-sonnet-4-6
 EOF
 
 # 16. Entrypoint provisioning script
@@ -253,6 +283,8 @@ EOF
 RUN cat > /usr/local/bin/entrypoint.sh <<'ENTRYPOINT_EOF'
 #!/bin/bash
 set -e
+
+echo "$(date '+%F %T') entrypoint.sh - starting"
 
 # Provision SSH authorized_keys after any volume mount
 if [ -f /etc/ssh/authorized_keys.provision ]; then
@@ -263,12 +295,14 @@ if [ -f /etc/ssh/authorized_keys.provision ]; then
 fi
 
 # Create required working directories
+echo "$(date '+%F %T') entrypoint.sh - create required working directories"
 mkdir -p "/home/${USERNAME}/screenshots"
 mkdir -p "/home/${USERNAME}/workspaces"
 
 # Write runtime credentials to a dedicated env file.
 # Written fresh on every start so Coolify env var changes take effect on redeploy.
 # /etc/bash.bashrc sources this file (wired up in the next Dockerfile step).
+echo "$(date '+%F %T') entrypoint.sh - write runtime credentials"
 cat > /etc/contagent-env.sh <<ENVEOF
 export ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 export GITHUB_TOKEN=${GITHUB_TOKEN}
@@ -278,15 +312,18 @@ export GITHUB_REPO_2=${GITHUB_REPO_2}
 export EXPO_TOKEN=${EXPO_TOKEN}
 export CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
 export CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
+export DATABASE_URL=postgresql://${USERNAME}@localhost:5432/${USERNAME}
 ENVEOF
 chmod 644 /etc/contagent-env.sh
 
 # Authenticate GitHub CLI as the non-root user
+echo "$(date '+%F %T') entrypoint.sh - authenticate GitHub CLI as the non-root user"
 if [ -n "${GITHUB_TOKEN}" ]; then
     echo "${GITHUB_TOKEN}" | su - "${USERNAME}" -c "gh auth login --with-token" || true
 fi
 
 # Clone primary repo if not already present
+echo "$(date '+%F %T') entrypoint.sh - cloning https://github.com/${GITHUB_ORG}/${GITHUB_REPO}.git"
 if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_ORG}" ] && [ -n "${GITHUB_REPO}" ]; then
     if [ ! -d "/home/${USERNAME}/${GITHUB_REPO}/.git" ]; then
         su - "${USERNAME}" -c "git clone 'https://${GITHUB_TOKEN}@github.com/${GITHUB_ORG}/${GITHUB_REPO}.git' '/home/${USERNAME}/${GITHUB_REPO}'" || true
@@ -294,6 +331,7 @@ if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_ORG}" ] && [ -n "${GITHUB_REPO}" ]
 fi
 
 # Clone secondary repo if defined
+echo "$(date '+%F %T') entrypoint.sh - cloning https://github.com/${GITHUB_ORG}/${GITHUB_REPO_2}.git"
 if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_ORG}" ] && [ -n "${GITHUB_REPO_2}" ]; then
     if [ ! -d "/home/${USERNAME}/${GITHUB_REPO_2}/.git" ]; then
         su - "${USERNAME}" -c "git clone 'https://${GITHUB_TOKEN}@github.com/${GITHUB_ORG}/${GITHUB_REPO_2}.git' '/home/${USERNAME}/${GITHUB_REPO_2}'" || true
@@ -314,11 +352,20 @@ CLAUDEJSON
 # Fix ownership of entire home directory
 chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
 
+# /var/run is tmpfs in Docker — these dirs are lost on every container start
+mkdir -p /var/run/sshd
+mkdir -p /var/run/postgresql
+chown postgres:postgres /var/run/postgresql
+
+# Remove stale postgres PID file left by an ungraceful container shutdown
+rm -f /var/lib/postgresql/16/main/postmaster.pid
+
 # Export runtime env vars so supervisord inherits them (used by %(ENV_X)s in supervisord.conf)
 set -a
 source /etc/contagent-env.sh
 set +a
 
+echo "[entrypoint] starting supervisord"
 exec supervisord -c /etc/supervisor/conf.d/supervisord.conf
 ENTRYPOINT_EOF
 
@@ -335,6 +382,7 @@ RUN printf '#!/bin/bash\nexec claude --dangerously-skip-permissions "$@"\n' \
 # The source line here ensures all interactive SSH shells pick it up.
 RUN echo '[ -f /etc/contagent-env.sh ] && source /etc/contagent-env.sh' >> /etc/bash.bashrc && \
     { \
+        echo "export PGDATA=${PGDATA}"; \
         echo "export JAVA_HOME=${JAVA_HOME}"; \
         echo "export M2_HOME=${M2_HOME}"; \
         echo "export GRADLE_HOME=${GRADLE_HOME}"; \
@@ -351,7 +399,7 @@ RUN echo '[ -f /etc/contagent-env.sh ] && source /etc/contagent-env.sh' >> /etc/
 
 EXPOSE 8022
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD nc -z localhost 8022 || exit 1
 
 CMD ["/usr/local/bin/entrypoint.sh"]
